@@ -4,7 +4,7 @@
 
 **Goal:** Build a local DeepSeek chat app that shows model reasoning and final answers in separate UI sections.
 
-**Architecture:** A Vite React frontend sends chat turns to an Express backend. The backend owns the DeepSeek API key, calls `https://api.deepseek.com/chat/completions`, enables thinking mode, and normalizes `reasoning_content` plus `content` for the UI.
+**Architecture:** A Vite React frontend sends chat turns to an Express backend. The backend owns the DeepSeek API key, calls `https://api.deepseek.com/chat/completions`, enables thinking mode with `stream: true`, and forwards normalized SSE events for reasoning and answer deltas.
 
 **Tech Stack:** React, Vite, Express, dotenv, Vitest, React Testing Library, Supertest, native `fetch`.
 
@@ -16,15 +16,15 @@
 - `index.html`: Vite HTML entry.
 - `vite.config.js`: React plugin, Vitest jsdom setup, and `/api` dev proxy.
 - `src/main.jsx`: frontend entrypoint.
-- `src/App.jsx`: chat state, composer, API call, and transcript rendering.
+- `src/App.jsx`: chat state, composer, streaming API call, and transcript rendering.
 - `src/AssistantMessage.jsx`: assistant response UI with collapsible reasoning.
 - `src/styles.css`: responsive app styling.
 - `src/test/setup.js`: jest-dom test setup.
 - `src/AssistantMessage.test.jsx`: frontend test for collapsible reasoning and final answer rendering.
-- `server/deepseekClient.js`: request construction, response parsing, and DeepSeek fetch call.
-- `server/deepseekClient.test.js`: tests for model, thinking payload, parsing, missing key, and upstream errors.
-- `server/app.js`: Express app factory and `/api/chat` route.
-- `server/app.test.js`: API route tests using injected chat client.
+- `server/deepseekClient.js`: request construction, non-stream parsing, stream parsing, and DeepSeek fetch call.
+- `server/deepseekClient.test.js`: tests for model, thinking payload, parsing, streaming parsing, missing key, and upstream errors.
+- `server/app.js`: Express app factory plus `/api/chat` JSON route and `/api/chat/stream` SSE route.
+- `server/app.test.js`: API route tests using injected chat clients.
 - `server/index.js`: local server startup and environment loading.
 - `.env.example`: documented environment variables without secrets.
 - `.env.local`: untracked local key file.
@@ -210,3 +210,112 @@ Expected: both commands exit with code 0.
 Run: `npm run dev`
 
 Expected: Express listens on `http://127.0.0.1:3001` and Vite serves the app on `http://127.0.0.1:5173`.
+
+## Task 7: Streaming DeepSeek Client
+
+**Files:**
+- Modify: `server/deepseekClient.test.js`
+- Modify: `server/deepseekClient.js`
+
+- [ ] **Step 1: Write failing streaming client tests**
+
+Add tests for `buildDeepSeekStreamRequest()` and `parseDeepSeekStream()`. `buildDeepSeekStreamRequest()` must include `stream: true`. `parseDeepSeekStream()` must consume DeepSeek SSE text and emit:
+
+```js
+[
+  { type: 'reasoning', delta: '先想' },
+  { type: 'answer', delta: '答案' }
+]
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npm test -- server/deepseekClient.test.js`
+
+Expected: FAIL because the streaming exports do not exist.
+
+- [ ] **Step 3: Implement streaming client helpers**
+
+Create exports:
+
+```js
+export function buildDeepSeekStreamRequest(messages) {}
+export async function* parseDeepSeekStream(readable) {}
+export async function streamWithDeepSeek(messages, options = {}) {}
+```
+
+`streamWithDeepSeek()` posts to DeepSeek with `stream: true` and returns the upstream readable body for the route to parse.
+
+- [ ] **Step 4: Run streaming client tests**
+
+Run: `npm test -- server/deepseekClient.test.js`
+
+Expected: PASS.
+
+## Task 8: Streaming API Route
+
+**Files:**
+- Modify: `server/app.test.js`
+- Modify: `server/app.js`
+
+- [ ] **Step 1: Write failing route tests**
+
+Add a route test that injects `streamClient` returning an async iterable with reasoning and answer deltas, posts to `/api/chat/stream`, and expects `text/event-stream` data lines containing normalized JSON events and a final `done` event.
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npm test -- server/app.test.js`
+
+Expected: FAIL because `/api/chat/stream` does not exist.
+
+- [ ] **Step 3: Implement streaming route**
+
+Add `/api/chat/stream`, set SSE headers, validate messages, write each normalized event as `data: <json>\n\n`, then write `data: {"type":"done"}\n\n` before ending.
+
+- [ ] **Step 4: Run route tests**
+
+Run: `npm test -- server/app.test.js`
+
+Expected: PASS.
+
+## Task 9: Frontend Incremental Rendering
+
+**Files:**
+- Modify: `src/App.test.jsx`
+- Modify: `src/App.jsx`
+
+- [ ] **Step 1: Write failing frontend streaming test**
+
+Mock `fetch()` to return a `ReadableStream` that sends multiple SSE data events. The test must verify that the app calls `/api/chat/stream` and renders the accumulated reasoning and answer text separately.
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npm test -- src/App.test.jsx`
+
+Expected: FAIL because the app still calls `/api/chat` and waits for JSON.
+
+- [ ] **Step 3: Implement frontend stream reader**
+
+Read `response.body.getReader()`, decode SSE chunks, append `reasoning` deltas to the in-progress assistant message's `reasoning`, append `answer` deltas to `answer`, and stop on `done`.
+
+- [ ] **Step 4: Run frontend tests**
+
+Run: `npm test -- src/App.test.jsx`
+
+Expected: PASS.
+
+## Task 10: Streaming Verification
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-05-09-deepseek-chat-app-design.md`
+- Modify: `docs/superpowers/plans/2026-05-09-deepseek-chat-app.md`
+
+- [ ] **Step 1: Run full verification**
+
+Run: `npm test && npm run build`
+
+Expected: both commands exit with code 0.
+
+- [ ] **Step 2: Run local streaming smoke test**
+
+Run a short POST to `http://127.0.0.1:3001/api/chat/stream` and verify the response contains at least one `reasoning` or `answer` SSE event plus `done`.

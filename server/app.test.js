@@ -53,3 +53,25 @@ describe('POST /api/chat', () => {
     });
   });
 });
+
+describe('POST /api/chat/stream', () => {
+  it('streams normalized reasoning, answer, and done events', async () => {
+    const messages = [{ role: 'user', content: '你好' }];
+    const streamClient = vi.fn(async function* () {
+      yield { type: 'reasoning', delta: '先理解' };
+      yield { type: 'answer', delta: '你好' };
+    });
+    const app = createApp({ streamClient });
+
+    const response = await request(app)
+      .post('/api/chat/stream')
+      .send({ messages })
+      .expect(200);
+
+    expect(streamClient).toHaveBeenCalledWith(messages);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.text).toContain('data: {"type":"reasoning","delta":"先理解"}');
+    expect(response.text).toContain('data: {"type":"answer","delta":"你好"}');
+    expect(response.text).toContain('data: {"type":"done"}');
+  });
+});

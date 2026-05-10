@@ -1,9 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildDeepSeekStreamRequest,
   buildDeepSeekRequest,
   chatWithDeepSeek,
+  parseDeepSeekStream,
   parseDeepSeekResponse
 } from './deepseekClient.js';
+
+function streamFromText(text) {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text));
+      controller.close();
+    }
+  });
+}
 
 describe('buildDeepSeekRequest', () => {
   it('uses deepseek-v4-flash with thinking mode enabled', () => {
@@ -14,6 +25,20 @@ describe('buildDeepSeekRequest', () => {
       messages,
       reasoning_effort: 'high',
       thinking: { type: 'enabled' }
+    });
+  });
+});
+
+describe('buildDeepSeekStreamRequest', () => {
+  it('adds stream true to the thinking request', () => {
+    const messages = [{ role: 'user', content: '流式回答' }];
+
+    expect(buildDeepSeekStreamRequest(messages)).toEqual({
+      model: 'deepseek-v4-flash',
+      messages,
+      reasoning_effort: 'high',
+      thinking: { type: 'enabled' },
+      stream: true
     });
   });
 });
@@ -37,6 +62,31 @@ describe('parseDeepSeekResponse', () => {
       answer: '最终答案是这样。',
       usage: { total_tokens: 42 }
     });
+  });
+});
+
+describe('parseDeepSeekStream', () => {
+  it('emits separate reasoning and answer deltas from DeepSeek SSE chunks', async () => {
+    const stream = streamFromText(
+      [
+        'data: {"choices":[{"delta":{"reasoning_content":"先想"}}]}',
+        '',
+        'data: {"choices":[{"delta":{"content":"答案"}}]}',
+        '',
+        'data: [DONE]',
+        ''
+      ].join('\n')
+    );
+
+    const events = [];
+    for await (const event of parseDeepSeekStream(stream)) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: 'reasoning', delta: '先想' },
+      { type: 'answer', delta: '答案' }
+    ]);
   });
 });
 

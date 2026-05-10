@@ -20,6 +20,48 @@ function toApiMessages(history, nextUserContent) {
   return messages;
 }
 
+function parseSseEvents(buffer) {
+  const parts = buffer.split(/\r?\n\r?\n/);
+  const remainder = parts.pop() ?? '';
+  const events = parts
+    .map((part) =>
+      part
+        .split('\n')
+        .map((line) => line.trimEnd())
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n')
+    )
+    .filter(Boolean)
+    .map((data) => JSON.parse(data));
+
+  return { events, remainder };
+}
+
+function appendAssistantDelta(messages, assistantId, event) {
+  return messages.map((message) => {
+    if (message.id !== assistantId) {
+      return message;
+    }
+
+    if (event.type === 'reasoning') {
+      return {
+        ...message,
+        reasoning: `${message.reasoning}${event.delta}`
+      };
+    }
+
+    if (event.type === 'answer') {
+      return {
+        ...message,
+        answer: `${message.answer}${event.delta}`
+      };
+    }
+
+    return message;
+  });
+}
+
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -39,36 +81,66 @@ export default function App() {
       role: 'user',
       content
     };
+    const assistantMessage = {
+      id: createMessageId(),
+      role: 'assistant',
+      reasoning: '',
+      answer: ''
+    };
     const requestMessages = toApiMessages(messages, content);
 
-    setMessages((current) => [...current, userMessage]);
+    setMessages((current) => [...current, userMessage, assistantMessage]);
     setDraft('');
     setError('');
     setIsSending(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ messages: requestMessages })
       });
-      const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || '请求 DeepSeek 失败');
+        throw new Error('请求 DeepSeek 失败');
       }
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: createMessageId(),
-          role: 'assistant',
-          reasoning: payload.reasoning,
-          answer: payload.answer
+      if (!response.body) {
+        throw new Error('浏览器不支持流式响应');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let isDone = false;
+
+      while (!isDone) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+        const parsed = parseSseEvents(buffer);
+        buffer = parsed.remainder;
+
+        for (const event of parsed.events) {
+          if (event.type === 'done') {
+            isDone = true;
+            break;
+          }
+
+          if (event.type === 'error') {
+            throw new Error(event.error || '请求 DeepSeek 失败');
+          }
+
+          setMessages((current) =>
+            appendAssistantDelta(current, assistantMessage.id, event)
+          );
         }
-      ]);
+
+        if (done) {
+          isDone = true;
+        }
+      }
     } catch (requestError) {
       setError(requestError.message || '请求 DeepSeek 失败');
     } finally {

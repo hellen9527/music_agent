@@ -8,6 +8,7 @@ Build a local web chat app that calls the official DeepSeek OpenAI-compatible AP
 - Final answer: the `content` returned by the model.
 
 The reasoning section must be collapsible so the user can hide or show it for each assistant message.
+Responses must stream incrementally. The user should see reasoning tokens appear in the reasoning section and final answer tokens appear in the answer section as the model produces them.
 
 ## External API
 
@@ -28,6 +29,7 @@ The backend will call the REST API directly. The request enables thinking mode w
 ```json
 {
   "model": "deepseek-v4-flash",
+  "stream": true,
   "reasoning_effort": "high",
   "thinking": {
     "type": "enabled"
@@ -42,17 +44,18 @@ For multi-turn conversations without tool calls, the client stores prior user me
 Use a small full-stack JavaScript app:
 
 - Vite + React frontend for the chat UI.
-- Express backend for `/api/chat`.
+- Express backend for `/api/chat/stream`.
 - The backend reads `DEEPSEEK_API_KEY` from local environment variables and never exposes it to the browser.
 
-The frontend sends the visible conversation to the backend. The backend calls DeepSeek, extracts `reasoning_content` and `content`, and returns a normalized JSON response:
+The frontend sends the visible conversation to the backend. The backend calls DeepSeek with `stream: true`, reads DeepSeek's server-sent event stream, and forwards normalized server-sent events to the browser:
 
 ```json
-{
-  "reasoning": "string",
-  "answer": "string"
-}
+{ "type": "reasoning", "delta": "string" }
+{ "type": "answer", "delta": "string" }
+{ "type": "done" }
 ```
+
+DeepSeek chunks with `delta.reasoning_content` become `reasoning` events. Chunks with `delta.content` become `answer` events. `data: [DONE]` ends the stream.
 
 ## UI
 
@@ -63,9 +66,10 @@ The UI contains:
 - A scrollable conversation transcript.
 - A composer with a send button.
 - Assistant messages with a collapsed-by-user reasoning panel and a separate final answer panel.
-- Loading and error states.
+- Loading, streaming, and error states.
 
 The reasoning panel starts expanded for new assistant messages so the user can see that the app satisfies the requirement, then can be collapsed per message.
+If a reasoning panel is collapsed while streaming, incoming reasoning text continues to accumulate and is visible when reopened.
 
 ## Security
 
@@ -77,7 +81,10 @@ Behavioral tests should cover:
 
 - Server request construction uses `deepseek-v4-flash` and thinking mode.
 - Server response parsing separates `reasoning_content` from `content`.
+- Server stream parsing emits separate reasoning and answer deltas.
+- API route streams normalized events to the browser.
 - Frontend assistant message rendering includes a collapsible reasoning section and a final answer section.
+- Frontend streaming reads incremental events and updates the current assistant message as chunks arrive.
 - Missing API key and DeepSeek API errors produce clear user-facing errors.
 
 ## References

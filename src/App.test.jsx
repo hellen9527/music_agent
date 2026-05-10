@@ -4,13 +4,28 @@ import App from './App.jsx';
 
 describe('App', () => {
   beforeEach(() => {
+    const encoder = new TextEncoder();
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({
-          reasoning: '先拆解用户问题。',
-          answer: '这是最终回答。'
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode('data: {"type":"reasoning","delta":"先拆解"}\n\n')
+            );
+            controller.enqueue(
+              encoder.encode('data: {"type":"reasoning","delta":"用户问题。"}\n\n')
+            );
+            controller.enqueue(
+              encoder.encode('data: {"type":"answer","delta":"这是"}\n\n')
+            );
+            controller.enqueue(
+              encoder.encode('data: {"type":"answer","delta":"最终回答。"}\n\n')
+            );
+            controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+            controller.close();
+          }
         })
       }))
     );
@@ -20,7 +35,7 @@ describe('App', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sends the user prompt and renders reasoning separately from the final answer', async () => {
+  it('streams the user prompt and renders reasoning separately from the final answer', async () => {
     render(<App />);
 
     fireEvent.change(screen.getByLabelText('输入消息'), {
@@ -30,7 +45,7 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
-        '/api/chat',
+        '/api/chat/stream',
         expect.objectContaining({ method: 'POST' })
       );
     });
