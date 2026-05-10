@@ -62,6 +62,38 @@ function appendAssistantDelta(messages, assistantId, event) {
   });
 }
 
+function extractJsonCandidate(answer) {
+  const trimmed = answer.trim();
+  const fencedJson = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fencedJson ? fencedJson[1].trim() : trimmed;
+}
+
+function formatFinalAnswer(answer) {
+  const candidate = extractJsonCandidate(answer);
+  if (!candidate.startsWith('{') && !candidate.startsWith('[')) {
+    return answer;
+  }
+
+  try {
+    return JSON.stringify(JSON.parse(candidate), null, 2);
+  } catch {
+    return answer;
+  }
+}
+
+function finalizeAssistantAnswer(messages, assistantId) {
+  return messages.map((message) => {
+    if (message.id !== assistantId) {
+      return message;
+    }
+
+    return {
+      ...message,
+      answer: formatFinalAnswer(message.answer)
+    };
+  });
+}
+
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -104,7 +136,7 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error('请求 DeepSeek 失败');
+        throw new Error('请求 Hermes Agent 失败');
       }
 
       if (!response.body) {
@@ -115,6 +147,18 @@ export default function App() {
       const decoder = new TextDecoder();
       let buffer = '';
       let isDone = false;
+      let hasFinalized = false;
+
+      const finalizeAnswer = () => {
+        if (hasFinalized) {
+          return;
+        }
+
+        hasFinalized = true;
+        setMessages((current) =>
+          finalizeAssistantAnswer(current, assistantMessage.id)
+        );
+      };
 
       while (!isDone) {
         const { value, done } = await reader.read();
@@ -124,12 +168,13 @@ export default function App() {
 
         for (const event of parsed.events) {
           if (event.type === 'done') {
+            finalizeAnswer();
             isDone = true;
             break;
           }
 
           if (event.type === 'error') {
-            throw new Error(event.error || '请求 DeepSeek 失败');
+            throw new Error(event.error || '请求 Hermes Agent 失败');
           }
 
           setMessages((current) =>
@@ -141,8 +186,10 @@ export default function App() {
           isDone = true;
         }
       }
+
+      finalizeAnswer();
     } catch (requestError) {
-      setError(requestError.message || '请求 DeepSeek 失败');
+      setError(requestError.message || '请求 Hermes Agent 失败');
     } finally {
       setIsSending(false);
     }

@@ -49,6 +49,25 @@ The bridge passes the local `DEEPSEEK_API_KEY` to Hermes and enables DeepSeek th
 
 For multi-turn conversations without tool calls, the client stores prior user messages and prior assistant final answers. It does not rely on previous reasoning text as normal conversational context.
 
+## Music Router Mode
+
+By default the Hermes bridge runs with `HERMES_AGENT_MODE=music_router`. In this mode, Hermes still owns the model turn, but the system prompt makes it act as a music-domain intent router rather than a general chat bot.
+
+For non-chat user queries, the final answer must be valid JSON only. It identifies the intent and the skill to call:
+
+- `精准搜索` -> `music_search`
+- `推荐` -> `music_recommend`
+- `随机推荐` -> `random_recommend`
+- `AI搜索` -> `ai_search`
+- `操控` -> `app_control`
+- `资产查询` -> `asset_query`
+- `榜单` -> `chart_query`
+- `任务编排` -> `task_plan`
+
+闲聊 queries are answered directly in natural language. Complex queries with multiple intents return a `task_plan` JSON object with ordered steps.
+
+The UI continues showing reasoning deltas as soon as Hermes emits them. Answer deltas also stream into the final answer area while generation is in progress. When the backend emits `done`, the frontend parses the completed answer; if it is valid JSON, it replaces the raw streamed text once with formatted structured JSON. This avoids showing half-complete JSON as the final stable state while still giving the user visible progress during generation.
+
 ## Architecture
 
 Use a small full-stack JavaScript app:
