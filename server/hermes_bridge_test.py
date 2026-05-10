@@ -38,6 +38,15 @@ class MusicRouterPromptTest(unittest.TestCase):
         self.assertIn('"skill": "ai_search"', message)
         self.assertIn('"skill": "music_search"', message)
 
+    def test_music_router_prompt_allows_semantic_chart_routing(self):
+        message = hermes_bridge.build_system_message(None, mode="music_router")
+
+        self.assertIn("不要求用户完整说出榜单名", message)
+        self.assertIn("最近有什么好听的歌", message)
+        self.assertIn('"skill": "chart_query"', message)
+        self.assertIn('"chart": "新歌榜"', message)
+        self.assertIn('"chart": "抖音热搜榜"', message)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -194,6 +194,44 @@ SSE 流式聊天接口。
 }
 ```
 
+最近/热门/新歌这类语义上能用榜单解决的请求，不需要用户完整说出榜单名：
+
+```text
+最近有什么好听的歌
+```
+
+应该先拉相关榜单，再按需要获取榜单返回歌曲的信息：
+
+```json
+{
+  "type": "task_plan",
+  "intent": "任务编排",
+  "steps": [
+    {
+      "intent": "榜单",
+      "skill": "chart_query",
+      "args": {
+        "chart": "新歌榜"
+      }
+    },
+    {
+      "intent": "榜单",
+      "skill": "chart_query",
+      "args": {
+        "chart": "抖音热搜榜"
+      }
+    },
+    {
+      "intent": "精准搜索",
+      "skill": "music_search",
+      "args": {
+        "keywords": ["榜单返回的歌曲名"]
+      }
+    }
+  ]
+}
+```
+
 需要实体解析和时效搜索：
 
 ```text
