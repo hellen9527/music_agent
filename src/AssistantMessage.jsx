@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export function AssistantMessage({ message }) {
   const [isReasoningOpen, setIsReasoningOpen] = useState(true);
@@ -18,6 +19,11 @@ export function AssistantMessage({ message }) {
             aria-controls={reasoningId}
             onClick={() => setIsReasoningOpen((current) => !current)}
           >
+            {isReasoningOpen ? (
+              <ChevronDown size={16} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={16} aria-hidden="true" />
+            )}
             {isReasoningOpen ? '收起思考过程' : '展开思考过程'}
           </button>
         </div>
