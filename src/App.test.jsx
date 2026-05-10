@@ -57,6 +57,36 @@ describe('App', () => {
     expect(screen.getByText('这是最终回答。')).toBeInTheDocument();
   });
 
+  it('submits with Enter and keeps Alt+Enter for new lines', async () => {
+    render(<App />);
+
+    const input = screen.getByLabelText('输入消息');
+    fireEvent.change(input, {
+      target: { value: '找点新歌' }
+    });
+
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      messages: [{ role: 'user', content: '找点新歌' }]
+    });
+
+    fetch.mockClear();
+    fireEvent.change(input, {
+      target: { value: '第一行' }
+    });
+    fireEvent.keyDown(input, {
+      key: 'Enter',
+      code: 'Enter',
+      altKey: true
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('streams raw answer deltas and replaces complete JSON with formatted output on done', async () => {
     const encoder = new TextEncoder();
     fetch.mockResolvedValueOnce({

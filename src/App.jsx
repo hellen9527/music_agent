@@ -195,6 +195,21 @@ export default function App() {
     }
   }
 
+  function handleComposerKeyDown(event) {
+    if (event.key !== 'Enter' || event.altKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    const form = event.currentTarget.form;
+    if (form?.requestSubmit) {
+      form.requestSubmit();
+      return;
+    }
+
+    form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -244,6 +259,7 @@ export default function App() {
           id="chat-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleComposerKeyDown}
           placeholder="输入消息"
           rows={2}
         />
