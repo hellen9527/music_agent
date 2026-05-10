@@ -23,16 +23,14 @@ The model is fixed to:
 deepseek-v4-flash
 ```
 
-The request enables thinking mode with high effort using OpenAI-compatible fields:
+The backend will call the REST API directly. The request enables thinking mode with high effort using OpenAI-compatible fields:
 
 ```json
 {
   "model": "deepseek-v4-flash",
   "reasoning_effort": "high",
-  "extra_body": {
-    "thinking": {
-      "type": "enabled"
-    }
+  "thinking": {
+    "type": "enabled"
   }
 }
 ```
