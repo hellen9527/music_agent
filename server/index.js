@@ -9,5 +9,5 @@ const host = '127.0.0.1';
 const app = createApp();
 
 app.listen(port, host, () => {
-  console.log(`DeepSeek chat API listening at http://${host}:${port}`);
+  console.log(`Hermes agent chat API listening at http://${host}:${port}`);
 });

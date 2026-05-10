@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 
 describe('POST /api/chat', () => {
-  it('returns normalized reasoning and answer from the chat client', async () => {
+  it('returns normalized reasoning and answer from the Hermes chat client', async () => {
     const messages = [{ role: 'user', content: '你好' }];
     const chatClient = vi.fn(async () => ({
       reasoning: '先理解用户问题。',
@@ -36,10 +36,10 @@ describe('POST /api/chat', () => {
     });
   });
 
-  it('returns a JSON error when the chat client fails', async () => {
+  it('returns a JSON error when the Hermes chat client fails', async () => {
     const app = createApp({
       chatClient: vi.fn(async () => {
-        throw new Error('DeepSeek API error (429): rate limit');
+        throw new Error('Hermes agent error: rate limit');
       })
     });
 
@@ -49,7 +49,7 @@ describe('POST /api/chat', () => {
       .expect(502);
 
     expect(response.body).toEqual({
-      error: 'DeepSeek API error (429): rate limit'
+      error: 'Hermes agent error: rate limit'
     });
   });
 });

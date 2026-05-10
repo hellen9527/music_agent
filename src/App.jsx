@@ -152,17 +152,17 @@ export default function App() {
     <main className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">DeepSeek</p>
-          <h1>Thinking Chat</h1>
+          <p className="eyebrow">Hermes Agent</p>
+          <h1>Agent Chat</h1>
         </div>
-        <span className="model-pill">deepseek-v4-flash</span>
+        <span className="model-pill">Hermes · deepseek-v4-flash</span>
       </header>
 
       <section className="conversation" aria-live="polite">
         {messages.length === 0 ? (
           <div className="empty-state">
             <strong>开始一轮对话</strong>
-            <span>模型的思考和回答会分开显示。</span>
+            <span>Hermes 的思考和回答会分开显示。</span>
           </div>
         ) : null}
 

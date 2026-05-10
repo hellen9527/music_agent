@@ -1,9 +1,8 @@
 import express from 'express';
 import {
-  chatWithDeepSeek,
-  parseDeepSeekStream,
-  streamWithDeepSeek
-} from './deepseekClient.js';
+  chatWithHermesAgent,
+  streamHermesAgent
+} from './hermesAgentClient.js';
 
 function isValidMessage(message) {
   return (
@@ -18,18 +17,13 @@ function hasValidMessages(messages) {
   return Array.isArray(messages) && messages.length > 0 && messages.every(isValidMessage);
 }
 
-async function* streamDeepSeekEvents(messages) {
-  const readable = await streamWithDeepSeek(messages);
-  yield* parseDeepSeekStream(readable);
-}
-
 function writeSseEvent(response, event) {
   response.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
 export function createApp({
-  chatClient = chatWithDeepSeek,
-  streamClient = streamDeepSeekEvents
+  chatClient = chatWithHermesAgent,
+  streamClient = streamHermesAgent
 } = {}) {
   const app = express();
 
@@ -49,7 +43,7 @@ export function createApp({
       response.json(await chatClient(messages));
     } catch (error) {
       response.status(502).json({
-        error: error.message || 'DeepSeek request failed'
+        error: error.message || 'Hermes agent request failed'
       });
     }
   });
@@ -79,7 +73,7 @@ export function createApp({
     } catch (error) {
       writeSseEvent(response, {
         type: 'error',
-        error: error.message || 'DeepSeek request failed'
+        error: error.message || 'Hermes agent request failed'
       });
       response.end();
     }

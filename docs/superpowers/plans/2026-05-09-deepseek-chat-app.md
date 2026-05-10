@@ -1,12 +1,12 @@
-# DeepSeek Chat App Implementation Plan
+# Hermes Agent Chat App Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a local DeepSeek chat app that shows model reasoning and final answers in separate UI sections.
+**Goal:** Build a local Hermes Agent chat app that shows agent/model reasoning and final answers in separate UI sections.
 
-**Architecture:** A Vite React frontend sends chat turns to an Express backend. The backend owns the DeepSeek API key, calls `https://api.deepseek.com/chat/completions`, enables thinking mode with `stream: true`, and forwards normalized SSE events for reasoning and answer deltas.
+**Architecture:** A Vite React frontend sends chat turns to an Express backend. The backend owns the DeepSeek API key, spawns a Python Hermes bridge, and Hermes `AIAgent` uses the DeepSeek provider with `deepseek-v4-flash`. The bridge streams Hermes reasoning and answer callbacks as JSON Lines, and Express forwards them as SSE events.
 
-**Tech Stack:** React, Vite, Express, dotenv, Vitest, React Testing Library, Supertest, native `fetch`.
+**Tech Stack:** React, Vite, Express, dotenv, Vitest, React Testing Library, Supertest, Node child processes, Python 3.11, Hermes Agent.
 
 ---
 
@@ -21,13 +21,15 @@
 - `src/styles.css`: responsive app styling.
 - `src/test/setup.js`: jest-dom test setup.
 - `src/AssistantMessage.test.jsx`: frontend test for collapsible reasoning and final answer rendering.
-- `server/deepseekClient.js`: request construction, non-stream parsing, stream parsing, and DeepSeek fetch call.
-- `server/deepseekClient.test.js`: tests for model, thinking payload, parsing, streaming parsing, missing key, and upstream errors.
+- `server/hermesAgentClient.js`: Node client that spawns the Python Hermes bridge and parses JSON Lines events.
+- `server/hermesAgentClient.test.js`: tests for bridge spawning, stream parsing, and aggregation.
+- `server/hermes_bridge.py`: Python bridge that imports Hermes `AIAgent` and maps callbacks to JSON Lines.
 - `server/app.js`: Express app factory plus `/api/chat` JSON route and `/api/chat/stream` SSE route.
 - `server/app.test.js`: API route tests using injected chat clients.
 - `server/index.js`: local server startup and environment loading.
 - `.env.example`: documented environment variables without secrets.
 - `.env.local`: untracked local key file.
+- `requirements-hermes.txt`: Python dependency pin for Hermes Agent from the official GitHub repository.
 
 ## Task 1: Tooling and Test Skeleton
 
@@ -64,43 +66,36 @@ Expected: `package-lock.json` is created and install exits with code 0.
 
 Run: `git add package.json package-lock.json index.html vite.config.js src/test/setup.js .env.example && git commit -m "chore: scaffold DeepSeek chat app tooling"`
 
-## Task 2: DeepSeek Client
+## Task 2: Hermes Agent Client
 
 **Files:**
-- Create: `server/deepseekClient.test.js`
-- Create: `server/deepseekClient.js`
+- Create: `server/hermesAgentClient.test.js`
+- Create: `server/hermesAgentClient.js`
+- Create: `server/hermes_bridge.py`
 
 - [ ] **Step 1: Write failing client tests**
 
-The tests assert that `buildDeepSeekRequest()` sends `deepseek-v4-flash`, `thinking.type = enabled`, and `reasoning_effort = high`; `parseDeepSeekResponse()` separates `reasoning_content` and `content`; and `chatWithDeepSeek()` reports missing key and upstream failures clearly.
+The tests assert that `streamHermesAgent()` spawns the Python bridge, passes messages as JSON, parses JSON Lines reasoning/answer events, and that `chatWithHermesAgent()` aggregates streamed events for the legacy JSON route.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npm test -- server/deepseekClient.test.js`
+Run: `npm test -- server/hermesAgentClient.test.js`
 
-Expected: FAIL because `server/deepseekClient.js` does not exist.
+Expected: FAIL because `server/hermesAgentClient.js` does not exist.
 
 - [ ] **Step 3: Implement client**
 
-Create exports:
-
-```js
-export function buildDeepSeekRequest(messages) {}
-export function parseDeepSeekResponse(payload) {}
-export async function chatWithDeepSeek(messages, options = {}) {}
-```
-
-`chatWithDeepSeek()` posts to `https://api.deepseek.com/chat/completions` with bearer auth, validates `DEEPSEEK_API_KEY`, and returns `{ reasoning, answer, usage }`.
+Create Node exports `buildHermesPayload()`, `streamHermesAgent()`, and `chatWithHermesAgent()`. Create `server/hermes_bridge.py` with `AIAgent(provider="deepseek", model="deepseek-v4-flash", ...)`.
 
 - [ ] **Step 4: Run client tests**
 
-Run: `npm test -- server/deepseekClient.test.js`
+Run: `npm test -- server/hermesAgentClient.test.js`
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit client**
 
-Run: `git add server/deepseekClient.js server/deepseekClient.test.js && git commit -m "feat: add DeepSeek chat client"`
+Run: `git add server/hermesAgentClient.js server/hermesAgentClient.test.js server/hermes_bridge.py && git commit -m "feat: add Hermes agent bridge"`
 
 ## Task 3: Express API
 
@@ -111,7 +106,7 @@ Run: `git add server/deepseekClient.js server/deepseekClient.test.js && git comm
 
 - [ ] **Step 1: Write failing route tests**
 
-The tests inject a fake `chatWithDeepSeek`, post `{ messages: [{ role: "user", content: "hi" }] }` to `/api/chat`, and expect normalized `{ reasoning, answer }`. They also verify empty messages return 400 and thrown client errors return a JSON error.
+The tests inject a fake Hermes chat client, post `{ messages: [{ role: "user", content: "hi" }] }` to `/api/chat`, and expect normalized `{ reasoning, answer }`. They also verify empty messages return 400 and thrown client errors return a JSON error.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -211,15 +206,16 @@ Run: `npm run dev`
 
 Expected: Express listens on `http://127.0.0.1:3001` and Vite serves the app on `http://127.0.0.1:5173`.
 
-## Task 7: Streaming DeepSeek Client
+## Task 7: Streaming Hermes Agent Client
 
 **Files:**
-- Modify: `server/deepseekClient.test.js`
-- Modify: `server/deepseekClient.js`
+- Modify: `server/hermesAgentClient.test.js`
+- Modify: `server/hermesAgentClient.js`
+- Modify: `server/hermes_bridge.py`
 
 - [ ] **Step 1: Write failing streaming client tests**
 
-Add tests for `buildDeepSeekStreamRequest()` and `parseDeepSeekStream()`. `buildDeepSeekStreamRequest()` must include `stream: true`. `parseDeepSeekStream()` must consume DeepSeek SSE text and emit:
+Add tests for bridge JSON Lines streaming. The fake Python bridge output must emit:
 
 ```js
 [
@@ -230,25 +226,17 @@ Add tests for `buildDeepSeekStreamRequest()` and `parseDeepSeekStream()`. `build
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npm test -- server/deepseekClient.test.js`
+Run: `npm test -- server/hermesAgentClient.test.js`
 
-Expected: FAIL because the streaming exports do not exist.
+Expected: FAIL because the Hermes streaming client exports do not exist.
 
 - [ ] **Step 3: Implement streaming client helpers**
 
-Create exports:
-
-```js
-export function buildDeepSeekStreamRequest(messages) {}
-export async function* parseDeepSeekStream(readable) {}
-export async function streamWithDeepSeek(messages, options = {}) {}
-```
-
-`streamWithDeepSeek()` posts to DeepSeek with `stream: true` and returns the upstream readable body for the route to parse.
+Wire `streamHermesAgent()` as the default Express stream client and make `server/hermes_bridge.py` call `AIAgent.run_conversation(..., stream_callback=on_answer)`.
 
 - [ ] **Step 4: Run streaming client tests**
 
-Run: `npm test -- server/deepseekClient.test.js`
+Run: `npm test -- server/hermesAgentClient.test.js`
 
 Expected: PASS.
 

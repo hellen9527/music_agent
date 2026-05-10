@@ -1,38 +1,48 @@
-# DeepSeek Chat App Design
+# Hermes Agent Chat App Design
 
 ## Goal
 
-Build a local web chat app that calls the official DeepSeek OpenAI-compatible API and displays each assistant response in two distinct parts:
+Build a local web chat app that calls Hermes Agent. Hermes is configured to use DeepSeek's OpenAI-compatible API with `deepseek-v4-flash`, but the application talks to the agent layer rather than directly to DeepSeek.
 
-- Reasoning: the `reasoning_content` returned by DeepSeek thinking mode.
-- Final answer: the `content` returned by the model.
+Each assistant response is displayed in two distinct parts:
+
+- Reasoning: reasoning deltas emitted by Hermes from the model's native thinking stream.
+- Final answer: answer deltas emitted by Hermes through its stream callback.
 
 The reasoning section must be collapsible so the user can hide or show it for each assistant message.
 Responses must stream incrementally. The user should see reasoning tokens appear in the reasoning section and final answer tokens appear in the answer section as the model produces them.
 
-## External API
+## External Runtime
 
-The app will use DeepSeek's official API base URL:
-
-```text
-https://api.deepseek.com
-```
-
-The model is fixed to:
+Hermes is installed as a Python dependency from the official Nous Research repository:
 
 ```text
-deepseek-v4-flash
+hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git
 ```
 
-The backend will call the REST API directly. The request enables thinking mode with high effort using OpenAI-compatible fields:
+The backend runs a Python bridge that imports Hermes:
+
+```python
+from run_agent import AIAgent
+```
+
+Hermes is configured with:
+
+```text
+provider=deepseek
+model=deepseek-v4-flash
+base_url=https://api.deepseek.com/v1
+```
+
+The bridge passes the local `DEEPSEEK_API_KEY` to Hermes and enables DeepSeek thinking mode through request overrides:
 
 ```json
 {
-  "model": "deepseek-v4-flash",
-  "stream": true,
   "reasoning_effort": "high",
-  "thinking": {
-    "type": "enabled"
+  "extra_body": {
+    "thinking": {
+      "type": "enabled"
+    }
   }
 }
 ```
@@ -45,9 +55,11 @@ Use a small full-stack JavaScript app:
 
 - Vite + React frontend for the chat UI.
 - Express backend for `/api/chat/stream`.
+- Node Hermes client that spawns `server/hermes_bridge.py`.
+- Python bridge that creates one Hermes `AIAgent` per request.
 - The backend reads `DEEPSEEK_API_KEY` from local environment variables and never exposes it to the browser.
 
-The frontend sends the visible conversation to the backend. The backend calls DeepSeek with `stream: true`, reads DeepSeek's server-sent event stream, and forwards normalized server-sent events to the browser:
+The frontend sends the visible conversation to the backend. The backend forwards it to Hermes, reads JSON Lines events from the Python bridge, and forwards normalized server-sent events to the browser:
 
 ```json
 { "type": "reasoning", "delta": "string" }
@@ -55,7 +67,7 @@ The frontend sends the visible conversation to the backend. The backend calls De
 { "type": "done" }
 ```
 
-DeepSeek chunks with `delta.reasoning_content` become `reasoning` events. Chunks with `delta.content` become `answer` events. `data: [DONE]` ends the stream.
+Hermes `reasoning_callback` output becomes `reasoning` events. Hermes `stream_callback` output becomes `answer` events. The bridge emits a final `done` event.
 
 ## UI
 
@@ -79,16 +91,17 @@ The API key is stored only in `.env.local`, which is ignored by Git. The reposit
 
 Behavioral tests should cover:
 
-- Server request construction uses `deepseek-v4-flash` and thinking mode.
-- Server response parsing separates `reasoning_content` from `content`.
-- Server stream parsing emits separate reasoning and answer deltas.
+- Hermes bridge client spawns the Python bridge and parses JSON Lines events.
+- Hermes bridge config uses `deepseek-v4-flash`, DeepSeek provider settings, and thinking overrides.
 - API route streams normalized events to the browser.
 - Frontend assistant message rendering includes a collapsible reasoning section and a final answer section.
 - Frontend streaming reads incremental events and updates the current assistant message as chunks arrive.
-- Missing API key and DeepSeek API errors produce clear user-facing errors.
+- Missing API key and Hermes errors produce clear user-facing errors.
 
 ## References
 
+- Hermes Python Library: https://hermes-agent.nousresearch.com/docs/guides/python-library
+- Hermes GitHub: https://github.com/NousResearch/hermes-agent
 - DeepSeek API: https://api-docs.deepseek.com/api/deepseek-api
 - Create Chat Completion: https://api-docs.deepseek.com/api/create-chat-completion
 - Thinking Mode: https://api-docs.deepseek.com/guides/thinking_mode
