@@ -28,6 +28,16 @@ class MusicRouterPromptTest(unittest.TestCase):
         self.assertIn("闲聊", message)
         self.assertIn("最终答案必须只输出 JSON", message)
 
+    def test_music_router_prompt_keeps_fresh_entity_expansion_out_of_recommendation(self):
+        message = hermes_bridge.build_system_message(None, mode="music_router")
+
+        self.assertIn("music_recommend 没有联网搜索能力", message)
+        self.assertIn("地域/身份/群体 + 新歌", message)
+        self.assertIn("想找点台湾歌手的新歌来听", message)
+        self.assertIn('"type": "task_plan"', message)
+        self.assertIn('"skill": "ai_search"', message)
+        self.assertIn('"skill": "music_search"', message)
+
 
 if __name__ == "__main__":
     unittest.main()

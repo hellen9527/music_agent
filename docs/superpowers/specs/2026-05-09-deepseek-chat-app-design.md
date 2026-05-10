@@ -66,6 +66,8 @@ For non-chat user queries, the final answer must be valid JSON only. It identifi
 
 闲聊 queries are answered directly in natural language. Complex queries with multiple intents return a `task_plan` JSON object with ordered steps.
 
+`music_recommend` is intentionally narrow: it handles subjective recommendation constraints such as scene, mood, language, style, era, or activity, but it has no search capability. Queries that require external knowledge, entity expansion, or freshness should route to `ai_search` or `task_plan`. For example, “想找点台湾歌手的新歌来听” should not become a plain recommendation, because the system first needs to understand which artists count as Taiwanese singers and then find their recent songs. That should be a plan such as `ai_search` for candidate artists/recent releases followed by `music_search` for the returned artist and song names.
+
 The UI continues showing reasoning deltas as soon as Hermes emits them. Answer deltas also stream into the final answer area while generation is in progress. When the backend emits `done`, the frontend parses the completed answer; if it is valid JSON, it replaces the raw streamed text once with formatted structured JSON. This avoids showing half-complete JSON as the final stable state while still giving the user visible progress during generation.
 
 ## Architecture
