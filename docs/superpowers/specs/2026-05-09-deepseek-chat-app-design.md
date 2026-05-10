@@ -72,6 +72,8 @@ Chart routing is semantic, not just literal. The user does not need to name a su
 
 Entity expansion is still different from general trend queries. For example, “想找点台湾歌手的新歌来听” should not become a plain recommendation, because the system first needs to understand which artists count as Taiwanese singers and then find their recent songs. That should be a plan such as `ai_search` for candidate artists/recent releases followed by `music_search` for the returned artist and song names.
 
+Negative feedback on a previous recommendation is context-dependent. If the previous assistant answer called `music_recommend` and the user says something like “这些不好听” or “换一批”, the agent should keep the previous recommendation conditions and call `music_recommend` again with the same keywords plus feedback indicating that the last batch was rejected. It should not switch to `random_recommend` or change style, scene, language, or era unless the user explicitly asks to change those conditions.
+
 The UI continues showing reasoning deltas as soon as Hermes emits them. Answer deltas also stream into the final answer area while generation is in progress. When the backend emits `done`, the frontend parses the completed answer; if it is valid JSON, it replaces the raw streamed text once with formatted structured JSON. This avoids showing half-complete JSON as the final stable state while still giving the user visible progress during generation.
 
 ## Architecture

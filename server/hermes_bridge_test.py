@@ -47,6 +47,16 @@ class MusicRouterPromptTest(unittest.TestCase):
         self.assertIn('"chart": "新歌榜"', message)
         self.assertIn('"chart": "抖音热搜榜"', message)
 
+    def test_music_router_prompt_preserves_recommendation_conditions_on_rejection(self):
+        message = hermes_bridge.build_system_message(None, mode="music_router")
+
+        self.assertIn("这些不好听", message)
+        self.assertIn("保留上一轮推荐条件", message)
+        self.assertIn("不要改成随机推荐", message)
+        self.assertIn('"intent": "推荐"', message)
+        self.assertIn('"skill": "music_recommend"', message)
+        self.assertIn('"feedback": "上一批不好听，保持条件换一批"', message)
+
 
 if __name__ == "__main__":
     unittest.main()
